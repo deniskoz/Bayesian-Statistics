@@ -1,0 +1,47 @@
+---
+title: "Statistical Rethinking Chapter 11"
+author: "Denis Kozhokar"
+date: "11/1/2018"
+output: html_document
+---
+#11E1. What is the difference between an ordered categorical variable and an unordered one? Define and then give an example of each.
+In an ordered categorical variable, the order of the counts matter. An example used in the book and within the social sciences are questionnaires. Scales that used in questionnaires are typically rated from 1-7. These numbers are ordered. This means that 2 is greater that 1, 7 is greater than 6,and etc. In unordered categorical variables, this does not occur and the numbers are arbitrary (0 = male, 1 = female).
+
+#11E2. What kind of link function does an ordered logistic regression employ? How does it differ from an ordinary logit link?
+It uses a cumulative link function. The cumulative link function provides the cumulative probability of a value plus the probability of any smaller value.
+
+A logit link provides the probability mass.
+
+#11E3. When count data are zero-inflated, using a model that ignores zero-inflation will tend to induce which kind of inferential error?
+
+A “zero” may mean that nothing happened, and nothing can happen either because the rate of events is low or because the process that generates events failed to get started. This information is lost if that count data is not zero-inflated.
+
+#11E4. Over-dispersion is common in count data. Give an example of a natural process that might produce over-dispersed counts. Can you also give an example of a process that might produce underdispersed counts?
+Over dispersion example: the amount of non-brown eyed families compared to brown-eyed families. This is not a average binomial distribution. Families with non-brown eyes are more likely to be all brown-eyed. Therefore, it is not a typical binomial distribution.
+
+For example, if a mouse is used a multiple amount of times. There is a possible increase in fault counts between the subjects using the mouse. The subjects would be closer together in faults than chance because they used the same mouse.
+
+
+
+
+#11M1. At a certain university, employees are annually rated from 1 to 4 on their productivity, with 1 being least productive and 4 most productive. In a certain department at this certain university in a certain year, the numbers of employees receiving each rating were (from 1 to 4): 12, 36, 7, 41. Compute the log cumulative odds of each rating.
+```{r}
+employees <- c(12, 36, 7, 41)
+employees_proportions <- employees / sum(employees)
+employees_proportions_cum <- cumsum(employees_proportions)
+log_cum_odds <- log(employees_proportions_cum / (1 - employees_proportions_cum))
+log_cum_odds
+```
+
+
+#11M2. Make a version of Figure 11.2 for the employee ratings data given just above.
+```{r}
+plot( 1:4 , employees_proportions_cum , type="b" , xlab="response" ,
+ylab="cumulative proportion" , ylim=c(0,1) )
+```
+
+
+
+#11M3. Can you modify the derivation of the zero-inflated Poisson distribution (ZIPoisson) from the chapter to construct a zero-inflated binomial distribution?
+Yes, we just change out the Poisson likelihood with the Binomial likelihood. Therefore, the zero-inflated binomial distribution (1 - P)Pr(y | N, p).
+

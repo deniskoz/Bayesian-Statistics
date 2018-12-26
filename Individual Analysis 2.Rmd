@@ -1,0 +1,54 @@
+---
+title: "Individual Analysis 2 Chapter 10"
+author: "Denis Kozhokar"
+date: "11/11/2018"
+output: html_document
+---
+The dataset that is being used is a very small part of my thesis. An EEG was used to measure engagement and workload (through formulas) to predict errors of omission in a dual task.  The current dataset is from 1 subject, with only the workload index. In addition, each possible trial (Total of 480) was parsed out in 200 sections (These are the predictor variables. I only inported the last 3 predictor variables. The predictor variables are already centered through the forumlas thagt were used. The purpose of this analysis was to use a logistic regression to look at the probability that an error would occur.
+
+```{r}
+library(readr)
+library(rethinking)
+library(rstan)
+
+#import dataset
+High_Workload_1016_TaskLoadIndex <- read_excel("Documents/MATLAB/High_Workload_1016_TaskLoadIndex.xlsx")
+
+as.()
+as.matrix.data.frame(High_Workload_1016_TaskLoadIndex)
+head(High_Workload_1016_TaskLoadIndex)
+
+m10.1 <- map(
+    alist(
+        admit ~ dbinom( 1 , p ) ,
+        logit(p) <- a ,
+        a ~ dnorm(0,1)
+),
+    data = mydata )
+precis(m10.1)
+
+
+m10.3 <- map(
+    alist(
+        pulled_left ~ dbinom( 1 , p ) ,
+        logit(p) <- a + bp*Time1 + bc*Time2 + bd*Time3 ,
+        a ~ dnorm(0,10) ,
+        bp ~ dnorm(0,1) ,
+        bc ~ dnorm(0,1) ,
+        bd ~ dnorm(0,1)
+), data=High_Workload_1016_TaskLoadIndex)
+precis(m10.1)
+```
+
+
+Li ∼ Binomial(1, pi)
+logit(pi) = α + (βP + βPCCi)Pi
+α ∼ Normal(0, 1) 
+β ∼ Normal(0, 1)
+σ ∼ Uniform(0, 1)
+
+```{r}
+
+```
+
+

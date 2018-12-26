@@ -1,0 +1,162 @@
+---
+title: "Individual Analysis Chapter 10"
+author: "Denis Kozhokar"
+date: "11/12/2018"
+output: html_document
+---
+
+The purpose of this dataset is to look at variables such as GRE (Graduate Record Exam scores), GPA (grade point average) and prestige of the undergraduate universities, to see their effect on admission into graduate school. The response variable is classified into a binary categorization of admission ("1") and no admission ("0").
+
+The mathematical model definition is:
+
+Ai ∼ Binomial(1, pi) 
+logit(pi) = αrank[i] + βGRi + βGPAi
+αrank ∼ Normal(0, 10) 
+βGRi ∼ Normal(200, 500)
+βGPAi ∼ Normal(0, 4)
+
+The Ai is college admission, GRi is GRE scores, and GPAi is for College GPA.
+
+An alpha rank mean and standard deviation was not known and a conservative prior was was used. The mean GRE scores that has been provided is 500 with a standard deviation of 200. The reason being that the range of GRE scores is from 200-800. In addition, a GPA with a mean of 2 and a standard deviation of 1 standard deviation of was used on a normal distribution because the scale only goes up to 4.0. A reasonable assumption is made that a student with an average GPA of 2.0 scored approximately 500 on the GRE. It is expected that GRE, GPA, and prestige are all predictors of admission into graduate school. One hypothesis is that College GPA is a stronger predictor of admission than GRE scores.
+
+
+```{r}
+library(readr)
+library(rethinking)
+library(rstan)
+
+mydata <- read.csv("/Users/yemiliyakozhokar 1/Downloads/binary.csv")
+
+# make index
+mydata$rank <- coerce_index( mydata$rank )
+
+head(mydata)
+```
+
+
+```{r}
+m10.7 <- map(
+  alist(
+    admit ~ dbinom( 1 , p ) ,
+    logit(p) <- a ,
+    a ~ dnorm(0,10)
+  ), data=mydata )
+
+precis(m10.7)
+
+logistic( c(-0.94,-0.59) )
+
+
+```
+The above summary implies a MAP probability of getting into graduate school of logistic(-0.77)≈ 0.31, with a 89% interval of 0.28 to 0.35. There is a much higher likelihood that an individual did not get accepted into graduate school.
+
+```{r}
+
+m10.8 <- alist(
+    admit ~ dbinom( 1 , p ) ,
+    logit(p) <- a + GRE*gre 
+)
+start_list <- list(
+    a = dnorm(0,10),
+    GRE = dnorm(500,200)
+)
+
+m10.8s <- map( m10.8 , data=mydata , start=start_list )
+
+precis(m10.8s)
+
+m10.9 <- alist(
+    admit ~ dbinom( 1 , p ) ,
+    logit(p) <- a + GRE*gre + GPA*gpa 
+)
+start_list <- list(
+    a = dnorm(0,10),
+    GRE = dnorm(500,200),
+    GPA = dnorm(2,1)
+)
+
+m10.9s <- map( m10.9 , data=mydata , start=start_list )
+
+precis(m10.9s)
+
+m10.10 <- alist(
+    admit ~ dbinom( 1 , p ) ,
+    logit(p) <- a[rank] + GRE*gre + GPA*gpa, 
+
+  a[rank] ~ dnorm(0,10)
+)
+start_list <- list(
+    GRE = dnorm(500,200),
+    GPA = dnorm(2,1)
+)
+
+m10.10s <- map( m10.10 , data=mydata , start=start_list )
+
+precis(m10.10s, depth = 2)
+
+compare( m10.7 , m10.8s, m10.9s, m10.10s)
+
+#plot(compare(m10.7 , m10.8s, m10.9s, m10.10s)
+
+#postcheck(m10.10s)
+```
+
+#Got the WAIC plot to work once and then it stopped.
+The plot of the WAIC scores demonstrates that model 10.10s performance is greater than the others (weight = 1). This is to be assumed as m10.10s has more predictors, but the model beats all of the other models in a WAIC comparison. The difference is not large when looking at the standard error (ex. m10.10s and 10.9s). Based on the structure of the predictors, it is important to note that there is a gradual increase in performance for each additional predictor variable that was inputed.
+
+#This may take too long. There are too many datapoints
+postcheck provides a plot with the probability of getting into graduate school for each individual case (student).
+
+
+
+```{r}
+precis(m10.10s, depth = 2)
+
+#provide odds-ratio
+exp(coef(m10.10s))
+
+pairs(m10.10s)
+```
+
+
+The log-odds and odds-ratio were calculated to demonstrate the effect GPA, GRE, and rank have on admission scores.
+
+The relative absolute effect can be measured for the effect of GRE on the odds of getting into graduate school. For every one unit change in the GRE score, the log odds of admission (versus non-admission) increases by 0 (it is important to note that the number needs to be drawn out into more decimal points). Context is important to provide. A one point increase in the GRE is relatively small when it is scored from 200-800.
+
+For every one unit increase in GPA, the log-odds of being admitted into a graduate school increase by .804.
+You can read this a proportional increase of 2.29 (129%) in the odds of getting into a graduate school.
+
+The rank is measured differently. Rank one will be used as an intercept. By attending a undergraduate university with a rank of 2 compared to a university with a rank of 1, changes in the log odds of admission decrease by -0.69.
+
+Odds ratios are provided as well.
+
+The provided information give the probability of each individual sub
+MCMC was not used because m10.10s could not be run.
+
+```{r}
+
+nc.seq <- seq(from=0.5,to=0.8,length.out=30)
+admit.ensemble <- ensemble( m10.7 , m10.8s, m10.9s, m10.10s , data=mydata )
+
+#summarize
+pred.p <- apply( admit.ensemble$link , 2 , mean )
+pred.p.PI <- apply( admit.ensemble$link , 2 , PI )
+
+pred.p
+```
+Giving the probabilities for each individual cell. It can be averaged out to demonstrate the probability that a specific individual gets accepted into graduate school (alternative the plot as it takes too long)
+
+
+
+
+```{r}
+post <- extract.samples( m10.10s )
+str( post )
+ dens( post$a[,2] )
+```
+
+Checking to see if there is any skewness for each rank.
+They were all normally distributed.
+
+
+Based on the given information, our hypothesis was correct. The impact of GPA on Graduate school admission did have a stronger effect than GRE scores. Each predictor variable indicated an effect on graduate school admission. The WAIC provided information with models that had the best performance. There was strong evidence to suggest that when inputting all of the predictor variables into the model, prediction was best.

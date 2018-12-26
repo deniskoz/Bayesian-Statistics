@@ -1,0 +1,61 @@
+---
+title: "Statistical Rethinking Chapter 10"
+author: "Denis Kozhokar"
+date: "10/25/2018"
+output: html_document
+---
+
+#10E1. If an event has probability 0.35, what are the log-odds of this event?
+```{r}
+log((0.35/0.65))
+
+```
+
+
+#10E2. If an event has log-odds 3.2, what is the probability of this event?
+```{r}
+exp(3.2)/(1 + exp(3.2))
+```
+
+
+#10E3. Suppose that a coefficient in a logistic regression has value 1.7. What does this imply about the proportional change in odds of the outcome?
+```{r}
+exp(1.7)
+
+```
+One unit change in X would make the event 5.474 times as likely to occur.
+
+#10E4. Why do Poisson regressions sometimes require the use of an offset? Provide an example.
+When either the length of observation, area of sampling, or intensity of sampling varies within a poisson distribution, we need to account for the variability. The reason being that a poisson distribution makes the assumption that the rates of observations are constant in time.  To account for the variability, we add the logarithm to the exposure of the model. This is called an offset.
+
+Lets say that I own a car dealership and would like to expand it to a second dealership. We want to know how many cars the second dealership will sell weekly. In the first dealership, approximately 18 cars are sold weekly. Unfortunately, we can't compare this to the second dealership because the former managers only kept a record of monthly sales.The issue here is that there will be a variation in the rate that a car sells between the two dealerships. a way to account for this is to use an offset variable.
+
+#10M1. As explained in the chapter,binomial data can be organized in aggregated and disaggregated forms, without any impact on inference. But the likelihood of the data does change when the data are converted between the two formats. Can you explain why?
+When we move from disaggregated to aggregated counts, the likelihood function changes from a Binomial model to a Poisson model. It is important to remember that a Poisson is special type of binomial model. Therefore, when this occurs, the frequency of events is what is being measured versus binomial events.
+
+#10M2. If a coefficient in a Poisson regression has value 1.7, what does this imply about the change in the outcome?
+```{r}
+exp(1.7)
+```
+
+an increase by one point in the independent variable will have a 5.4739 increase in the positive probability for the dependent variable in one trial.
+
+#10M3. Explain why the logit link is appropriate for a binomial generalized linear model.
+
+In a binomial generalized linear model, the "p" parameter is being transformed from a linear model into a probability. Because this parameter is defined as a probability mass, it is contrained on an interval scale that ranges from 0-1. The logit link makes this constraint
+
+#10M4. Explain why the log link is appropriate for a Poisson generalized linear model.
+
+In a Poisson generalized linear model, the lambda is used as its parameter. The log link ensures that the lambda is always positive and what is required from the expected value of a count outcome. In addition, it provides an exponential relationship beteen the predictors an expected data.
+
+#10M5. What would it imply to use a logit link for the mean of a Poisson generalized linear model? Can you think of a real research problem for which this would make sense?
+
+If you use a logit link on the mean of a poisson GLM, then your expected value would be between 0-1.No, I cannot. There would have to be a continuous amount of positive occurances.
+
+#10M6. State the constraints for which the binomial and Poisson distributions have maximum entropy. Are the constraints different at all for binomial and Poisson? Why or why not?
+
+When only two event-types are possible and the expected numbers of each type are assumed to be constant across the trials,then the binomial distribution provides the maximum entropy distribution.
+
+The Poisson distribution is used for counts within a certain time peroid. This maximum entropy distribution has the same constraints as the Binomial distribution.
+
+The constraints for each are identical. A poisson distribution is a special case of a binomial distirbution.

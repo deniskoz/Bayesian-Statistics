@@ -1,0 +1,66 @@
+The purpose of this analysis was to look at the relationshup of College GPA and ACT composite scores. Specifically, predicting College GPA using ACT composite scores. The GPA was taken from students who finished their sophmore year of college.
+
+The mathematical model definition is:
+
+Ci ∼ Normal(μi, σ)
+μi = α + βai
+α ∼ Normal(3, 2) 
+β ∼ Normal(0, 20)
+σ ∼ Uniform(0, 36)
+
+The Gi is the College GPA and ai is ACT scores
+
+An alpha level mean of 3 was used as it is close to the overall mean of college gpa in the U.S. In addition, a GPA with a standard deviation of 2 was used on a normal distribution because the scale only goes up to 4.0. It is expected that there is between a zero to a highly positive relationship between ACT scores and GPA. But, it is unknown the strength of the slope. Therefore, no increase (0) was included. An ACT score is known to not be higher than a 36, therefore any students with the same GPA will still never go higher than a 36.
+
+```{r}
+library(rethinking)
+library(rstan)
+College_GPA <- read.csv("Documents/College_GPA.csv")
+head(College_GPA)
+```
+
+It is important to note that the predictor variable was not centered because it has a natural 0 point. Both the outcome and predicted variable is on a ratio scale.
+
+```{r}
+
+sample_a <- rnorm( 1e4 , 3 , 2)
+sample_b <- rnorm( 1e4 , 0 , 20)
+prior_h <- rnorm( 1e4 , sample_a , sample_b )
+dens( prior_h )
+
+IA1 <- map(alist(
+   GPA ~ dnorm( mu , sigma ),
+   mu <- a + b*ACT,
+   a ~ dnorm( 3 , 2 ),
+   b ~ dnorm( 0 , 20),
+   sigma ~ dunif( 0 , 36 )
+ ),
+ data = College_GPA)
+precis(IA1)
+
+
+```
+
+Since we are interested in prediction, the slope is of interest. The beta tells us that as ACT Composite scores increase by 1, the GPA of the student increases by 0.08. In addition, 89% of the posterior probability lies between 0.05 and 0.12. There is evidence to suggest their is a positive relationship and that ACT scores are a good indicator of college GPA. Although the relationship may be small, it is important remember that the scale is very narrow (0-4.0). The alpha tells us that if an students ACT score was 0, their GPA would be 0.70. This is uninformative.In addition, the variance tells us that 95% of plausible GPA scores lie within .92 decimals from the average GPA.
+
+
+
+```{r}
+
+ACT.seq <- seq( from=15 , to=35 , by=1 )
+mu <- link( IA1 , data=data.frame(ACT=ACT.seq) )
+
+# summarize the distribution of mu
+mu.mean <- apply( mu , 2 , mean )
+mu.HPDI <- apply( mu , 2 , HPDI , prob=0.89 )
+
+# plot raw data
+# fading out points to make line and interval more visible
+plot( GPA ~ ACT , data=College_GPA , xlab="ACT Scores", ylab="GPA", col=rangi2)
+lines(ACT.seq , mu.mean)
+shade(mu.HPDI , ACT.seq)
+
+```
+
+
+This plot shows the posterior data with thew Map line. In addition, HPDI region shown over the map line provides the mean distrubutions. The distribution is a little wider on the tail ends of the plot and it is assumed this will occur when looking at the tails of a distribution.

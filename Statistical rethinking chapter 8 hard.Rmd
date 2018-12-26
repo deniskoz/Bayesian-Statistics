@@ -1,0 +1,202 @@
+---
+title: "Statistical Rethinking Chapter 8 Hard"
+author: "Denis Kozhokar"
+date: "10/18/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+#8H1. Run the model below and then inspect the posterior distribution and explain what it is accomplishing.
+
+```{r}
+library(rethinking)
+library(rstan)
+
+mp <- map2stan(
+    alist(
+        a ~ dnorm(0,1),
+        b ~ dcauchy(0,1)
+    ),
+    data=list(y=1),
+    start=list(a=0,b=0),
+    iter=1e4, warmup=100 , WAIC=FALSE )
+
+# extract samples for a and b
+trials <- 10000
+a_sample <- extract.samples(mp, pars="a", n = trials)
+b_sample <- extract.samples(mp, pars="b", n = trials)
+
+plot(x = seq(from = 1, to = trials, length.out = trials), y = a_sample$a, ylim = c(-4, 4))
+lines(seq(from = 1, to = trials, length.out = trials), a_sample$a)
+
+plot(x = seq(from = 1, to = trials, length.out = trials), y = b_sample$b, ylim = c(-50, 50))
+lines(seq(from = 1, to = trials, length.out = trials), b_sample$b)
+
+```
+
+The markov chain is taking samples from a posterior distribution with 1000 iterations for a and b. This is a resampling techinque that doesnt assume any kind of distribution. In this case, we can tell if the chain is strong and if the samples are strongly correlated with each other.
+
+#Compare the samples for the parameters a and b. Can you explain the different trace plots, using what you know about the Cauchy distribution?
+
+The book mentions that the couchy distribution has no mean and standard deviations. Because of this, an outlier can overwhelm prior samples. This can be seen in the second plot with a large and unpredictable variance in some samples. But, the central tendancy towards the center point is seen more clearly in the couchy distribution. The Gaussian distribtuion plot is overwhelmingly dense.
+
+#8H2. Recall the divorce rate example from Chapter 5. Repeat that analysis, using map2stan this time, fitting models m5.1, m5.2, and m5.3. Use compare to compare the models on the basis of WAIC. Explain the results.
+```{r}
+data(WaffleDivorce)
+d <- WaffleDivorce
+
+# standardize variables
+d$Marriage.standardized <- (d$Marriage - mean(d$Marriage)) / sd(d$Marriage)
+
+d$MedianAgeMarriage.standardized <- (d$MedianAgeMarriage - mean(d$MedianAgeMarriage)) / sd(d$MedianAgeMarriage)
+
+
+m5.1 <- map2stan(
+  alist(
+    Divorce ~ dnorm( mu , sigma ) ,
+    mu <- a + bA * MedianAgeMarriage.standardized ,
+    a ~ dnorm( 10 , 10 ) ,
+    bA ~ dnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 10 )
+  ),
+  data = d , chains=4 )
+m5.2 <- map2stan(
+  alist(
+    Divorce ~ dnorm( mu , sigma ) ,
+    mu <- a + bR * Marriage.standardized ,
+    a ~ dnorm( 10 , 10 ) ,
+    bR ~ dnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 10 )
+  ),
+  data = d , chains=4 )
+m5.3 <- map2stan(
+  alist(
+    Divorce ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*Marriage.standardized + bA*MedianAgeMarriage.standardized ,
+    a ~ dnorm( 10 , 10 ) ,
+    bR ~ dnorm( 0 , 1 ) ,
+    bA ~ dnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 10 )
+  ),
+  data = d , chains=4 )
+
+compare(m5.1,m5.2,m5.3)
+
+
+```
+The results demonstrate that the model with the highest accuracy used the median age of marriage to predict divorce. It is important to remember that a smaller WAIC indicates better estimated out-of-sample deviance.
+
+#8H3. Sometimes changing a prior for one parameter has unanticipated effects on other parameters. This is because when a parameter is highly correlated with another parameter in the posterior, the prior influences both parameters. Here’s an example to work and think through. Go back to the leg length example in Chapter 5. Here is the code again, which simulates height and leg lengths for 100 imagined individuals:
+
+```{r}
+# number of individuals
+N <- 100 
+# sim total height of each
+height <- rnorm(N,10,2) 
+# leg as proportion of height
+leg_prop <- runif(N,0.4,0.5)
+# sim left leg as proportion + error
+leg_left <- leg_prop*height +
+    rnorm( N , 0 , 0.02 ) 
+# sim right leg as proportion + error
+leg_right <- leg_prop*height +
+    rnorm( N , 0 , 0.02 ) 
+# combine into data frame
+dataframe <- data.frame(height,leg_left,leg_right)
+
+```
+And below is the model you fit before, resulting in a highly correlated posterior for the two beta parameters. This time, fit the model using map2stan:
+
+```{r}
+m5.8s <- map2stan(
+    alist(
+        height ~ dnorm( mu , sigma ) ,
+        mu <- a + bl*leg_left + br*leg_right ,
+        a ~ dnorm( 10 , 100 ) ,
+        bl ~ dnorm( 2 , 10 ) ,
+        br ~ dnorm( 2 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=dataframe, chains=4, start=list(a=10,bl=0,br=0,sigma=1) )
+```
+
+Compare the posterior distribution produced by the code above to the posterior distribution produced when you change the prior for br so that it is strictly positive:
+```{r}
+m5.8s2 <- map2stan(
+    alist(
+        height ~ dnorm( mu , sigma ) ,
+        mu <- a + bl*leg_left + br*leg_right ,
+        a ~ dnorm( 10 , 100 ) ,
+        bl ~ dnorm( 2 , 10 ) ,
+        br ~ dnorm( 2 , 10 ) & T[0,] ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=dataframe, chains=4, start=list(a=10,bl=0,br=0,sigma=1) )
+```
+
+Note that T[0,] on the right-hand side of the prior for br. What the T[0,] does is truncate the normal distribution so that it has positive probability only above zero. In other words, that prior ensures that the posterior distribution for br will have no probability mass below zero.
+  Compare the two posterior distributions for m5.8s and m5.8s2. What has changed in the posterior distribution of both beta parameters? Can you explain the change induced by the change in prior?
+```{r}
+precis(m5.8s)
+precis(m5.8s2)
+```
+The slopes(beta parameters) was halved (from 2.07-1.09 & 2.08=1.08) and when truncating half of the distribution. Because the left and right leg are dependent on each other, both of the slopes changed when truncating only one of the slopes.
+
+#8H4. For the two models fit in the previous problem, use DIC or WAIC to compare the effective numbers of parameters for each model. Which model has more effective parameters? Why?
+```{r}
+compare(m5.8s, m5.8s2)
+```
+m.8s has more effective parameters (pWAIC = 3.5). The reason is because it is capturing more samples. Specifically, the samples that have a negative br slope. This can be bad or good because m.8s could be capturing a lot of noise in the samples that is not applicable to the question at hand.
+
+#8H5. Modify the Metropolis algorithm code from the chapter to handle the case that the island populations have a different distribution than the island labels. This means the island’s number will not be the same as its population.
+```{r}
+#I know this is wrong.
+
+MetropolisIslands=function(num_weeks = 1e5,start=1)
+{
+positions <- rep(0,num_weeks)
+current <- start
+for ( i in 1:num_weeks ) {
+  # flip coin to generate proposal
+  proposal <- current + sample( c(-1,1) , size=1 )
+  # now make sure he loops around the archipelago
+  if ( proposal < 1 )  proposal <- 10
+  if ( proposal > 10 ) proposal <- 1
+  # move?
+  prob_move <- proposal/current
+  current <- ifelse( runif(1) < prob_move , proposal , current )
+  # record current position
+  positions[i] <- current
+}
+return(positions)
+}
+positionsnow <- MetropolisIslands(num_weeks=100,start=3)
+positionsnow
+```
+
+#8H6. Modify the Metropolis algorithm code from the chapter to write your own simple MCMC estimator for globe tossing data and model from Chapter 2.
+```{r}
+#I know this is wrong as well
+
+Globetoss=function(length = 1000,start=1)
+{
+positions <- rep(0,1)
+current <- start
+for ( i in 1:length ) {
+  # flip coin to generate proposal
+  proposal <- current + sample( c(-1,1) , size=1 )
+  # now make sure he loops around the archipelago
+  if ( proposal < 6 )  proposal <- 9
+  if ( proposal > 9 ) proposal <- 6
+  # move?
+  prob_move <- proposal/current
+  current <- ifelse( runif(1) < prob_move , proposal , current )
+  # record current position
+  positions[i] <- current
+}
+return(positions)
+}
+Globetossnow <- Globetoss(length=1000,start=1)
+Globetossnow
+```

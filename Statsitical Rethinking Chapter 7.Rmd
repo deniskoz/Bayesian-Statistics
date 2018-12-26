@@ -1,0 +1,59 @@
+---
+title: "Statistical Rethinking Chapter 7"
+author: "Denis Kozhokar"
+date: "10/4/2018"
+output: html_document
+---
+
+#7E1. For each of the causal relationships below, name a hypothetical third variable that would lead to an interaction effect.
+
+(1) Bread dough rises because of yeast.
+Stored temperature
+
+(2) Education leads to higher income.
+Occupation
+
+(3) Gasoline makes a car go.
+Car types 
+
+#7E2. Which of the following explanations invokes an interaction?
+(1) Caramelizing onions requires cooking over low heat and making sure the onions do not dry out.
+
+#7E3. For each of the explanations in 7E2, write a linear model that expresses the stated relationship.
+(1) Caramelizing onions requires cooking over low heat and making sure the onions do not dry out.
+(2) A car will go faster when it has more cylinders or when it has a better fuel injector.
+(3) Most people acquire their political beliefs from their parents,unless they get them instead
+from their friends.
+(4) Intelligent animal species tend to be either highly social or have manipulative appendages
+(hands, tentacles, etc.).
+
+(1)
+Ci ∼ Normal(μi, σ)                              [likelihood]
+μi = α + (βH)(Hi) + (βD)(Di)                    [linear model of μ]
+βi = βH + (βDH)(Di)                             [linear model of slope]
+μi = α+(βH)(Hi) +(βD)(Di) + (βHD)(Hi)(Di)       [Interaction]
+
+(2)
+Fi ∼ Normal(μi, σ)                              [likelihood]
+μi = α + FCCi + FIIi                            [linear model of μ]
+
+(3)
+Bi ∼ Normal(μi, σ)                              [likelihood]
+μi = α + BPPi + PFFi                            [linear model of μ]
+
+(4)
+Ai ∼ Normal(μi, σ)                              [likelihood]
+μi = α + ASSi + AMMi                            [linear model of μ]
+
+#7M1. Recall the tulips example from the chapter. Suppose another set of treatments adjusted the temperature in the greenhouse over two levels: cold and hot. The data in the chapter were collected at the cold temperature. You find none of the plants grown under the hot temperature developed any blooms at all, regardless of the water and shade levels. Can you explain this result in terms of interactions between water, shade, and temperature?
+
+Because the tulips do not grow at all when the temperature is hot, this means that the the relationshp between bloom size and and temperature is non-linear.
+Therefore, we can determine that there is an interaction between water, shade, and temperature.
+
+#7M2. Can you invent a regression equation that would make the bloom size zero, whenever the temperature is hot?
+
+In order to have a regression equation that would make the bloom size zero, we would need to only include the terms that interacted with the "not hot" level. Therefore, if it is  != "not hot", then the bloom size 0.
+
+#7M3. In parts of North America, ravens depend upon wolves for their food. This is because ravens are carnivorous but cannot usually kill or open carcasses of prey. Wolves however can and do kill and tear open animals, and they tolerate ravens co-feeding at their kills. This species relationship is generally described as a “species interaction.” Can you invent a hypothetical set of data on raven population size in which this relationship would manifest as a statistical interaction? Do you think the biological interaction could be linear? Why or why not?
+
+The amount food a raven consumes and the appearance of a wolf. This would be a linear relationship if there is is a wolf next to a prey. But, without a wolf, a raven wouldn't be able to eat food therefore, it is not a linear relationship. The relationship is dependent on if there is a wolf around the "food".

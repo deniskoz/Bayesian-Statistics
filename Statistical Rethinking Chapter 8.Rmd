@@ -1,0 +1,235 @@
+---
+title: "Statistical Rethinking Chapter 8"
+author: "Denis Kozhokar"
+date: "10/11/2018"
+output: html_document
+---
+
+#8E1. Which of the following is a requirement of the simple Metropolis algorithm?
+(3) The proposal distribution must be symmetric.
+
+#8E2. Gibbs sampling is more efficient than the Metropolis algorithm. How does it achieve this extra efficiency? Are there any limitations to the Gibbs sampling strategy?
+The improvement arises from adaptive proposals in which the distribution of proposed parameter values adjusts itself intelligently, depending upon the parameter values at the moment. How Gibbs sampling computes these adaptive proposals depends upon using particular combinations of prior distributions and likelihoods known as conjugate pairs. 
+Conjugate pairs have analytical solutions for the posterior distribution of an individual parameter. 
+And these solutions are what allow Gibbs sampling to make smart jumps around the joint posterior distribution of all parameters.
+
+Some conjugate priors don't make sense and choosing a prior so that the model fits efficiently isn’t really a strong argument from a scientific perspective. Models that are more complex and contain hundreds or thousands or tens of thousands of parameters, Gibbs sampling is very inefficient.
+
+#8E3. Which sort of parameters can Hamiltonian Monte Carlo not handle? Can you explain why?
+Discrete paramaters. Actually, they can. Here is a link to the article and it mentions that is outperforms a Metropolis-within-Gibbs algorithm. https://arxiv.org/abs/1705.08510
+Because it looks at parameters on a continuous vector that is constantly updating based on density.
+
+#8E4. Explain the difference between the effective number of samples, n_eff as calculated by Stan, and the actual number of samples.
+The effective number of samples is an estimate of the number of independent samples from the posterior distribution. These samples are most important for good estimates of your posterior distribution.
+#8E5. Which value should Rhat approach, when a chain is sampling the posterior distribution correctly?
+It should approach 1.00.
+#8E6. Sketch a good trace plot for a Markov chain,one that is effectively sampling from the posterior distribution. What is good about its shape? Then sketch a trace plot for a malfunctioning Markov chain. What about its shape indicates malfunction?
+
+```{r}
+library(rethinking)
+library(rstan)
+
+m8.3 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- alpha ,
+        alpha ~ dnorm( 1 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=list(y=y) , start=list(alpha=0,sigma=1) , chains=2 , iter=4000 , warmup=1000 )
+plot(m8.3)
+```
+The good thing about this chain is that it is stationary and has good mixing.
+
+```{r}
+y <- c(-1,1)
+m8.2 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- alpha
+),
+data=list(y=y) , start=list(alpha=0,sigma=1) , chains=2 , iter=4000 , warmup=1000 )
+plot(m8.2)
+```
+
+This chain is getting extremely positive and extremely negative parameter values because of flat priors. They are not stationary.
+
+
+
+#8M1. Re-estimate the terrain ruggedness model from the chapter,but now using a uniform prior and an exponential prior for the standard deviation, sigma. The uniform prior should be dunif(0,10) and the exponential should be dexp(1). Do the different priors have any detectible influence on the posterior distribution?
+
+```{r}
+data(rugged)
+d <- rugged
+d$log_gdp <- log(d$rgdppc_2000)
+dd <- d[ complete.cases(d$rgdppc_2000) , ]
+dd.trim <- dd[ , c("log_gdp", "rugged", "cont_africa")]
+
+# Uniform prior on sigma
+m8.1_uniform <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dunif(0, 10)
+  ), data=dd.trim )
+
+precis(m8.1_uniform)
+
+# Exponential prior on sigma
+m8.1_exponential <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dexp(1)
+  ), data=dd.trim )
+
+precis(m8.1_exponential)
+
+```
+No, there isn't a detectible influence on the models. An easy way to see this is to compare the model outputs (Mean, SD,Rhat,n_eff).
+
+
+#8M2. The Cauchy and exponential priors from the terrain ruggedness model are very weak. They can be made more informative by reducing their scale. Compare the dcauchy and dexp priors for progressively smaller values of the scaling parameter. As these priors become stronger, how does each influence the posterior distribution?
+```{r}
+m8.2.cauchy.20 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 20)
+  ), data=dd.trim )
+
+m8.2.cauchy.10 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 10)
+  ), data=dd.trim )
+
+m8.2.cauchy.1 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1)
+  ), data=dd.trim )
+
+
+m8.2.exp.20 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dexp(20)
+  ), data=dd.trim )
+
+m8.2.exp.10 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dexp(10)
+  ), data=dd.trim )
+
+m8.2.exp.1 <- map2stan(
+  alist(
+    log_gdp ~ dnorm( mu , sigma ) ,
+    mu <- a + bR*rugged + bA*cont_africa + bAR*rugged*cont_africa ,
+    a ~ dnorm(0, 100),
+    bR ~ dnorm(0, 10),
+    bA ~ dnorm(0, 10),
+    bAR ~ dnorm(0, 10),
+    sigma ~ dexp(1)
+  ), data=dd.trim )
+
+sigma.cauchy.20 <- extract.samples(m8.2.cauchy.20, pars="sigma")
+sigma.cauchy.10 <- extract.samples(m8.2.cauchy.10, pars="sigma")
+sigma.cauchy.1 <- extract.samples(m8.2.cauchy.1, pars="sigma")
+dens(sigma.cauchy.20[[1]], xlab="sigma", col="red")
+dens(sigma.cauchy.10[[1]], add=TRUE, col="blue")
+dens(sigma.cauchy.1[[1]], add=TRUE, col="green")
+
+sigma.exp.20 <- extract.samples(m8.2.exp.20, pars="sigma")
+sigma.exp.10 <- extract.samples(m8.2.exp.10, pars="sigma")
+sigma.exp.1 <- extract.samples(m8.2.exp.1, pars="sigma")
+dens(sigma.exp.20[[1]], xlab="sigma", col="red")
+dens(sigma.exp.10[[1]], add=TRUE, col="blue")
+dens(sigma.exp.1[[1]], add=TRUE, col="green")
+
+```
+
+the peakedness or kurtosis increases when the sigma is decreased in both exponential and couchy priors. In addition, the posterior distributions look smoother.
+
+#8M3. Re-estimate one of the Stan models from the chapter, but at different numbers of warmup iterations. Be sure to use the same number of sampling iterations in each case. Compare the n_eff values. How much warmup is enough?
+```{r}
+m8.5_warmup_2 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- a1 + a2 ,
+        a1 ~ dnorm( 0 , 10 ) ,
+        a2 ~ dnorm( 0 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=list(y=y) , start=list(a1=0,a2=0,sigma=1) , chains=2 , iter=4000 , warmup=2 )
+precis(m8.5_warmup_2)
+
+m8.5_warmup_5 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- a1 + a2 ,
+        a1 ~ dnorm( 0 , 10 ) ,
+        a2 ~ dnorm( 0 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=list(y=y) , start=list(a1=0,a2=0,sigma=1) , chains=2 , iter=4000 , warmup=5 )
+precis(m8.5_warmup_5)
+
+m8.5_warmup_10 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- a1 + a2 ,
+        a1 ~ dnorm( 0 , 10 ) ,
+        a2 ~ dnorm( 0 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=list(y=y) , start=list(a1=0,a2=0,sigma=1) , chains=2 , iter=4000 , warmup=10 )
+precis(m8.5_warmup_10)
+
+m8.5_warmup_50 <- map2stan(
+    alist(
+        y ~ dnorm( mu , sigma ) ,
+        mu <- a1 + a2 ,
+        a1 ~ dnorm( 0 , 10 ) ,
+        a2 ~ dnorm( 0 , 10 ) ,
+        sigma ~ dcauchy( 0 , 1 )
+),
+data=list(y=y) , start=list(a1=0,a2=0,sigma=1) , chains=2 , iter=4000 , warmup=100 )
+precis(m8.5_warmup_50)
+
+```
+
+Its seems like the warmup of just over 5 gives out good enough Rhat estimates. A warmup of 100 is enough when looking at the n_eff values between this model and the books model. In the book, they used 1000 warmups.

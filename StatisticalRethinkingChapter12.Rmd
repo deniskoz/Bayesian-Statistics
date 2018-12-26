@@ -1,0 +1,255 @@
+---
+title: "StatisticalRethinkingChapter12"
+author: "Denis Kozhokar"
+date: "11/8/2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(rethinking)
+library(rstan)
+```
+
+
+#12E1. Which of the following priors will produce more shrinkage in the estimates?
+  (a) αtank ∼ Normal(0, 1)
+  
+#12E2. Make the following model into a multilevel model.
+  yi ∼ Binomial(1, pi)
+  logit(pi) = αgroup[i] + βxi 
+  αgroup ∼ Normal(0, 10)
+  β ∼ Normal(0, 1)
+
+
+Q12.E2 <- map2stan(
+    alist(
+        yi ~ dbinom( density , p ) ,
+        logit(p) <- alpha[i] + beta ,
+        alpha[i] ~ dnorm( 0,10 ) ,
+        beta ~ dnorm(0,1)
+    ), data=d , iter=4000 , chains=4 )
+
+
+
+#12E3. Make the following model into a multilevel model.
+  yi ∼ Normal(μi, σ)
+  μi = αgroup[i] + βxi 
+  αgroup ∼ Normal(0, 10)
+  β ∼ Normal(0, 1)
+  σ ∼ HalfCauchy(0, 2)
+
+
+Q12.E3 <- map2stan(
+    alist(
+        yi ~ dbinom( density , p ) ,
+        logit(p) <- alpha[i] + beta ,
+        alpha[i] ~ dnorm( 0 , 10 ) ,
+        sigma ~ dcauchy(0,1),
+        beta ~ dnorm(0,1)
+    ), data=d , iter=4000 , chains=4 )
+
+  
+#12E4. Write an example mathematical model formula for a Poisson regression with varying intercepts.
+  Ti ∼ Poisson(μi)
+  log(μi) = α[i]
+  αi ∼ Normal(α, σ)
+  α ∼ Normal(0, 1)
+  σ∼ HalfCauchy(0, 1)
+
+#12E5. Write an example mathematical model formula for a Poisson regression with two different kinds of varying intercepts, a cross-classified model.
+  Ti ∼ Poisson(μi)
+  log(μi) = α + αactor[i] + αblock[i] + (βP + βPCCi)Pi
+  αactor ∼ Normal(0, σactor)
+  αblock ∼ Normal(0, σblock)
+  α ∼ Normal(0, 10) 
+  βP ∼ Normal(0, 10) 
+  βPC ∼ Normal(0, 10)
+  σactor ∼ HalfCauchy(0, 1) 
+  σblock ∼ HalfCauchy(0, 1)
+
+#12M1. Revisit the Reed frog survival data, data(reedfrogs), and add the predation and size treatment variables to the varying intercepts model. Consider models with either main effect alone, both main effects, as well as a model including both and their interaction. Instead of focusing on inferences about these two predictor variables, focus on the inferred variation across tanks. Explain why it changes as it does across models.
+```{r}
+data(reedfrogs)
+d <- reedfrogs
+str(d)
+
+# make the tank cluster variable
+d$tank <- 1:nrow(d)
+d$pred <- ifelse(test = d$pred == "pred", yes = 1, no = 0)
+d$frogsize <- ifelse(test = d$size == "big", yes = 1, no = 0)
+
+# fit several models
+Q12M1_pred <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank] + beta_pred*pred,
+    alpha[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1),
+    beta_pred ~ dnorm(0, 1)
+  ), data=d )
+
+Q12M1_size <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank] + beta_frogsize*frogsize,
+    alpha[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1),
+    beta_frogsize ~ dnorm(0, 1)
+  ), data=d )
+
+Q12M1_both <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank] + beta_pred*pred + beta_frogsize*frogsize,
+    alpha[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1),
+    c(beta_pred, beta_frogsize) ~ dnorm(0, 1)
+  ), data=d )
+
+Q12M1_interaction <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank] + beta_pred*pred + beta_frogsize*frogsize + beta_pred_frogsize*pred*frogsize,
+    alpha[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1),
+    c(beta_pred, beta_frogsize, beta_pred_frogsize) ~ dnorm(0, 1)
+  ), data=d )
+
+# posterior predictive check
+post_pred <- function(model, df) {
+  post <- extract.samples(model)
+  
+  # compute median intercept for each tank
+  # also transform to probability with logistic
+  df$propsurv_est <- logistic( apply( X = post$alpha, MARGIN = 2, FUN = median ) )
+  
+  # display raw proportions surviving in each tank
+  plot( df$propsurv , ylim=c(0,1) , pch=16 , xaxt="n" ,
+        xlab="tank" , ylab="proportion survival" , col=rangi2 )
+  axis( 1 , at=c(1,16,32,48) , labels=c(1,16,32,48) )
+  
+  # overlay posterior medians
+  points( df$propsurv_est )
+  
+  # mark posterior median probability across tanks
+  abline( h=logistic(median(post$alpha)) , lty=2 )
+  
+  # draw vertical dividers between tank densities
+  abline( v=16.5 , lwd=0.5 )
+  abline( v=32.5 , lwd=0.5 )
+  text( 8 , 0 , "small tanks" )
+  text( 16+8 , 0 , "medium tanks" )
+  text( 32+8 , 0 , "large tanks" )
+}
+
+post_pred(model = Q12M1_pred, df = d)
+post_pred(model = Q12M1_size, df = d)
+post_pred(model = Q12M1_both, df = d)
+post_pred(model = Q12M1_interaction, df = d)
+
+coeftab(Q12M1_pred, Q12M1_size, Q12M1_both, Q12M1_interaction)
+
+```
+
+After more predictors were added, the amount of variation decreased across tanks. The reason is because more of the variation could be explained when adding more predictors.
+
+
+#12M2. Compare the models you fit just above, using WAIC. Can you reconcile the differences in WAIC with the posterior distributions of the models?
+
+```{r}
+compare(Q12M1_pred, Q12M1_size, Q12M1_both, Q12M1_interaction)
+precis(Q12M1_size)
+precis(Q12M1_pred)
+```
+
+
+#12M3. Re-estimate the basic Reed frog varying intercept model,but now using a Cauchy distribution in place of the Gaussian distribution for the varying intercepts. That is, fit this model:
+  si ∼ Binomial(ni, pi) 
+  logit(pi) = αtank[i]
+  αtank ∼ Cauchy(α, σ)
+  α ∼ Normal(0, 1)
+  σ ∼ HalfCauchy(0, 1)
+  
+Compare the posterior means of the intercepts, αtank, to the posterior means produced in the chapter, using the customary Gaussian prior. Can you explain the pattern of differences?
+  
+```{r}
+m12M3.alpha.cauchy <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank],
+    alpha[tank] ~ dcauchy(m, shape),
+    m ~ dnorm(0, 10),
+    shape ~ dcauchy(0, 1)
+  ), data=d )
+
+m12M3.alpha.normal <- map2stan(
+  alist(
+    surv ~ dbinom(density, p) ,
+    logit(p) <- alpha[tank],
+    alpha[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1)
+  ), data=d )
+
+# compare
+coeftab(m12M3.alpha.cauchy, m12M3.alpha.normal)
+
+# plot with author's code
+post.normal <- extract.samples(m12M3.alpha.normal)
+alpha.tank.normal <- apply(X = post.normal$alpha, MARGIN = 2, FUN = mean)
+post.cauchy <- extract.samples(m12M3.alpha.cauchy)
+alpha.tank.cauchy <- apply(X = post.cauchy$alpha, MARGIN = 2, FUN = mean)
+plot( alpha.tank.normal , alpha.tank.cauchy , pch=16 , col=rangi2 ,
+      xlab="Gaussian prior" , ylab="Cauchy prior" )
+abline(a=0, b=1, lty=2)
+```
+
+Somse of the Cauchy means are larger. The reason being that the cauchy has a longer tail and more data points that are possible. The Gaussian prior pulls extreme data points more than the Cauchy.
+
+#12M4. Fit the following cross-classified multilevel model to the chimpanzees data: 
+  Li ∼ Binomial(1, pi)
+  logit(pi) = αactor[i] + αblock[i] + (βP + βPCCi)Pi 
+  αactor ∼ Normal(α, σactor)
+  αblock ∼ Normal(γ, σblock)
+  α,γ,βP,βPC ∼ Normal(0,10) 
+  σactor, σblock ∼ HalfCauchy(0, 1)
+
+Each of the parameters in those comma-separated lists gets the same independent prior. Compare the posterior distribution to that produced by the similar cross-classified model from the chapter. Also compare the number of effective samples. Can you explain the differences?
+```{r}
+data(chimpanzees)
+d <- chimpanzees
+str(d)
+d$block_id <- d$block
+d$actor <- d$actor
+
+m12.5 <- map2stan(
+    alist(
+        pulled_left ~ dbinom( 1 , p ),
+        logit(p) <- a_actor[actor] + a_block[block_id] +
+                    (bp + bpc*condition)*prosoc_left,
+        a_actor[actor] ~ dnorm( a , sigma_actor ),
+        a_block[block_id] ~ dnorm( y , sigma_block ),
+        c(a,y,bp,bpc) ~ dnorm(0,10),
+        sigma_actor ~ dcauchy(0,1),
+        sigma_block ~ dcauchy(0,1)
+),
+data=d, warmup=1000 , iter=6000 , chains=4 , cores=3 )
+
+precis(m12.5,depth=2) # depth=2 displays varying effects
+plot(precis(m12.5,depth=2)) # also plot
+
+post <- extract.samples(m12.5)
+dens( post$sigma_block , xlab="sigma" , xlim=c(0,4) )
+dens( post$sigma_actor , col=rangi2 , lwd=2 , add=TRUE )
+text( 2 , 0.85 , "actor" , col=rangi2 )
+text( 0.75 , 2 , "block" )
+```
+
+Yes, because there is less variation and more shrinkage, there will be more effective samples. Again, the reason being that the more samples provided in the model, the more likelihood of effective samples.
+

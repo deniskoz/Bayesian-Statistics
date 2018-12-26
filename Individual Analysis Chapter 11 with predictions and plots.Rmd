@@ -1,0 +1,351 @@
+---
+title: "Individual Analysis Chapter 11 with bms"
+author: "Denis Kozhokar"
+date: "11/17/2018"
+output: html_document
+---
+
+The dataset looks at factors that influence the decision of whether to apply to graduate school. College juniors are asked if they are unlikely, somewhat likely, or very likely to apply to graduate school. Therefore, the outcome variable has 3 different levels. Also, there is data on parental educational status, whether the undergraduate institution is public or private, and current GPA. The is a strong reason to believe that the distances between the 3 different levels.
+
+```{r}
+library(rethinking)
+library(brms)
+library(foreign)
+library(MASS)
+library(Hmisc)
+library(reshape2)
+library(ggthemes)
+
+dat <- read.dta("https://stats.idre.ucla.edu/stat/data/ologit.dta")
+head(dat)
+
+#descriptives
+lapply(dat[, c("apply", "pared", "public")], table)
+
+#3-way cross-table
+ftable(xtabs(~ public + apply + pared, data = dat))
+```
+
+
+
+```{r}
+canva_pal("Green fields")(4)
+canva_pal("Green fields")(4)[3]
+
+as.character(dat$apply)
+dat$apply <- as.numeric(dat$apply)
+```
+
+#The histogram of the outcome variable.
+
+```{r, message = F, warning = F, fig.width = 2.5, fig.height = 3}
+library(tidyverse)
+
+ggplot(data = dat, aes(x = apply, fill = ..x..)) +
+  geom_histogram(binwidth = 1/4, size = 0) +
+  scale_x_continuous(breaks = 1:3) +
+  theme_hc() +
+  scale_fill_gradient(low = canva_pal("Green fields")(4)[4],
+                      high = canva_pal("Green fields")(4)[1]) +
+  theme(axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = "grey92"),
+        legend.position = "none")
+```
+
+#Cumulative proportion (should equal to 1)
+```{r, fig.width = 2.5, fig.height = 3}
+dat %>%
+  group_by(apply) %>% 
+  count() %>%
+  mutate(pr_k = n/nrow(dat)) %>% 
+  ungroup() %>% 
+  mutate(cum_pr_k = cumsum(pr_k)) %>% 
+  
+  ggplot(aes(x = apply, y = cum_pr_k, 
+             fill = apply)) +
+  geom_line(color = canva_pal("Green fields")(4)[2]) +
+  geom_point(shape = 21, colour = "grey92", 
+             size = 2.5, stroke = 1) +
+  scale_x_continuous(breaks = 1:3) +
+  scale_y_continuous(breaks = c(0, .5, 1)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(y = "cumulative proportion") +
+  theme_hc() +
+  scale_fill_gradient(low = canva_pal("Green fields")(4)[4],
+                      high = canva_pal("Green fields")(4)[1]) +
+  theme(axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = "grey92"),
+        legend.position = "none")
+```
+
+#Log cumulative odds
+```{r, fig.width = 2.5, fig.height = 3}
+# convenience function
+logit <- function(x) log(x/(1-x))
+
+dat %>%
+  group_by(apply) %>% 
+  count() %>%
+  mutate(pr_k = n/nrow(dat)) %>% 
+  ungroup() %>% 
+  mutate(cum_pr_k = cumsum(pr_k)) %>% 
+  filter(apply < 3) %>% 
+  
+  # We can do the logit() conversion right in ggplot2
+  ggplot(aes(x = apply, y = logit(cum_pr_k), 
+             fill = apply)) +
+  geom_line(color = canva_pal("Green fields")(4)[2]) +
+  geom_point(shape = 21, colour = "grey92", 
+             size = 2.5, stroke = 1) +
+  scale_x_continuous(breaks = 1:3) +
+  coord_cartesian(xlim = c(1, 3)) +
+  labs(y = "log-cumulative-odds") +
+  theme_hc() +
+  scale_fill_gradient(low = canva_pal("Green fields")(4)[4],
+                      high = canva_pal("Green fields")(4)[1]) +
+  theme(axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = "grey92"),
+        legend.position = "none")
+```
+
+
+```{r, fig.width = 3.5, fig.height = 3}
+d_plot <-
+  dat %>%
+  group_by(apply) %>% 
+  count() %>%
+  mutate(pr_k = n/nrow(dat)) %>% 
+  ungroup() %>% 
+  mutate(cum_pr_k = cumsum(pr_k)) 
+
+ggplot(data = d_plot,
+       aes(x = apply, y = cum_pr_k, 
+             color = cum_pr_k, fill = cum_pr_k)) +
+  geom_line(color = canva_pal("Green fields")(4)[1]) +
+  geom_point(shape = 21, colour = "grey92", 
+             size = 2.5, stroke = 1) +
+  geom_linerange(aes(ymin = 0, ymax = cum_pr_k),
+                 alpha = 1/2, color = canva_pal("Green fields")(4)[1]) +
+  # There are probably more elegant ways to do this part.
+  geom_linerange(data = . %>% 
+                   mutate(discrete_probability =
+                            ifelse(apply == 1, cum_pr_k,
+                                   cum_pr_k - pr_k)),
+                 aes(x = apply + .025,
+                     ymin = ifelse(apply == 1, 0, discrete_probability), 
+                     ymax = cum_pr_k),
+                 color = "black") +
+  geom_text(data = tibble(text        = 1:3,
+                          apply = seq(from = 1.25, to = 3.25, by = 1),
+                          cum_pr_k = d_plot$cum_pr_k - .065),
+            aes(label = text),
+            size = 4) +
+  scale_x_continuous(breaks = 1:3) +
+  scale_y_continuous(breaks = c(0, .5, 1)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(y = "cumulative proportion") +
+  theme_hc() +
+  scale_fill_gradient(low = canva_pal("Green fields")(4)[4],
+                      high = canva_pal("Green fields")(4)[1]) +
+  scale_color_gradient(low = canva_pal("Green fields")(4)[4],
+                       high = canva_pal("Green fields")(4)[1]) +
+  theme(axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = "grey92"),
+        legend.position = "none")
+```
+
+
+
+```{r, message = F, warning = F}
+# Start values
+Inits <- list(`Intercept[1]` = -2,
+              `Intercept[2]` = -1)
+
+InitsList <-list(Inits, Inits)
+
+b11.1 <- 
+  brm(data = dat, family = cumulative,
+      apply ~ 1,
+      prior = c(set_prior("normal(0, 10)", class = "Intercept")),
+      iter = 2000, warmup = 1000, chains = 2,
+      inits = InitsList)  # Here we place our start values into brm()
+```
+
+
+```{r}
+print(b11.1)
+```
+
+#The model looks good. The rhat is at 1.00 and the effective samples are high.
+
+
+# invlogit is relatively similar as the logit function
+```{r}
+invlogit <- function(x){1/(1+exp(-x))}
+logit <- function(x) log(x/(1-x))
+
+b11.1 %>% 
+  fixef() %>% 
+  invlogit()
+
+
+```
+#This is just the intercept model for model comparison
+
+
+#Adding predictor variables.
+
+```{r}
+# First, we needed to specify the logistic() function, which is apart of the dordlogit() function
+logistic <- function(x) {
+    p <- 1 / (1 + exp(-x))
+    p <- ifelse(x == Inf, 1, p)
+    p
+    }
+
+# Now we get down to it
+dordlogit <- 
+  function(x, phi, a, log = FALSE) {
+    a  <- c(as.numeric(a), Inf)
+    p  <- logistic(a[x] - phi)
+    na <- c(-Inf, a)
+    np <- logistic(na[x] - phi)
+    p  <- p - np
+    if (log == TRUE) p <- log(p)
+    p
+    }
+```
+
+The `dordlogit()`.
+
+```{r}
+(pk <- dordlogit(1:3, 0, fixef(b11.1)[, 1]))
+```
+
+
+```{r}
+sum(pk*(1:3))
+```
+ 
+# (1) is for unlikely, (2) is for somewhat likely, (3) is for likely to apply
+
+```{r}
+(
+  explicit_example <-
+  tibble(probability_of_applying = pk) %>%
+  mutate(likelihood_of_applying = 1:3) %>%
+  mutate(their_product = probability_of_applying*likelihood_of_applying)
+)
+
+explicit_example %>%
+  summarise(average_outcome_value = sum(their_product))
+```
+
+
+Now we'll try it by subtracting .5 from each.
+ 
+```{r}
+# The probabilities of a given apply
+(pk <- dordlogit(1:3, 0, fixef(b11.1)[, 1] - .5))
+
+# The average rating
+sum(pk*(1:3))
+```
+
+So the rule is we *subtract the linear model from each interecept*. Let's fit our multivariable models.
+
+```{r, message = F}
+# Start values for b11.2
+Inits <- list(`Intercept[1]` = -1.9,
+              `Intercept[2]` = -1.2,
+              pared = 0,
+              public = 0,
+              GPA = 0)
+
+b11.2 <- 
+  brm(data = dat, family = cumulative,
+      apply ~ 1 + pared + public + gpa,
+      prior = c(set_prior("normal(0, 10)", class = "Intercept"),
+                set_prior("normal(0, 10)", class = "b")),
+      iter = 2000, warmup = 1000, chains = 2,
+      inits = list(Inits, Inits))
+
+# Start values for b11.3
+Inits <- list(`Intercept[1]` = -1.9,
+              `Intercept[2]` = -1.2,
+              pared = 0,
+              public = 0,
+              gpa = 0,
+              `pared:public` = 0,
+              `GPA:public` = 0)
+
+b11.3 <- 
+  brm(data = dat, family = cumulative,
+      apply ~ 1 + pared + public + gpa +
+        pared:public + gpa:public,
+      prior = c(set_prior("normal(0, 10)", class = "Intercept"),
+                set_prior("normal(0, 10)", class = "b")),
+      iter = 2000, warmup = 1000, chains = 2,
+      inits = list(Inits, Inits))
+```
+
+
+#Same as the coef() tab
+```{r, message = F}
+library(broom)
+
+tidy(b11.1) %>% mutate(model = "b11.1") %>% 
+  bind_rows(tidy(b11.2) %>% mutate(model = "b11.2")) %>% 
+  bind_rows(tidy(b11.3) %>% mutate(model = "b11.3")) %>% 
+  select(model, term, estimate) %>% 
+  filter(term != "lp__") %>% 
+  complete(term = distinct(., term), model) %>% 
+  mutate(estimate = round(estimate, digits = 2)) %>%
+  spread(key = model, value = estimate) %>% 
+  slice(c(2, 3, 4, 6, 1, 5, 7))  # Here we indicate the order we'd like the rows in
+```
+#WAIC comparisons
+
+```{r}
+waic(b11.1, b11.2, b11.3)
+```
+#It seems like b11.2 is the best model based on it having the lowest WAIC. b11.3 has the interaction terms but still has a lower WAIC. b11.2 will be used further on and for interpretation.
+```{r}
+print(b11.2)
+```
+
+# Public demonstrates a negative effect on the expected value of applying. The confidence metric crosses 0. Therefore, there is not strong effect as the effect can be positive or negative. For every one unit increase in pared (from 0-1), there is a 1.07 increase in the expected value of apply on the log odds scale, given all of the other variables in the model stay the same. For every one unit increase in gpa, ther is a 0.62 increase in the expected value of apply in the log odds scale, given that all of the other variables stay the same.
+
+```{r}
+#provide odds-ratio
+fixef(b11.2) %>%
+  exp()
+
+```
+#For pared, every one unit increase in parental education, the odds of “very likely” applying versus “somewhat likely” or “unlikely” applying combined are 2.91 greater, given that all of the other variables in the model are held constant. Also, the odds “very likely” or “somewhat likely” applying versus “unlikely” applying is 2.91 times greater, given that all of the other variables in the model are held constant. For gpa, when a student’s gpa moves 1 unit, the odds of moving from “unlikely” applying to “somewhat likely” or “very likley” applying (or from the lower and middle categories to the high category) are increased by 1.85 (85%).
+
+#Same As extracting samples and assigning to "post"
+```{r}
+newdat <- data.frame(
+  pared = rep(0:1, 200),
+  public = rep(0:1, each = 200),
+  gpa = rep(seq(from = 1.9, to = 4, length.out = 100), 4))
+
+newdat <- cbind(newdat, predict(b11.2, newdat, type = "probs"))
+head(newdat)
+
+lnewdat <- melt(newdat, id.vars = c("pared", "public", "gpa"),
+  variable.name = "Level", value.name="Probability")
+## view first few rows
+head(lnewdat)
+```
+#This table gives you the predicted probabilities
+
+```{r}
+ggplot(lnewdat, aes(x = gpa, y = Probability, colour = Level)) +
+  geom_line() + facet_grid(pared ~ public, labeller="label_both")
+
+```
+#A plot to demonstrate what is occuring
+
+

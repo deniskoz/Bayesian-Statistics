@@ -1,0 +1,258 @@
+---
+title: "StatisticalRethinkingChapter13"
+author: "Denis Kozhokar"
+date: "11/15/2018"
+output: html_document
+---
+
+#13E1. Add to the following model varying slopes on the predictor x.
+yi ∼ Normal(μi, σ)
+μi = αgroup[i] + βxi αgroup ∼ Normal(α, σα)
+α ∼ Normal(0, 10)
+β ∼ Normal(0, 1)
+σ ∼ HalfCauchy(0, 2)
+σα ∼ HalfCauchy(0, 2)
+
+
+yi ∼ Normal(μi, σ)
+μi = αgroup[i] + βxiAi
+[αcafé βcafé] ∼ MVNormal ([α β]), S)
+
+S=(σα 0 )   R (σα 0 )
+  (0  σβ)     (0  σβ)
+
+α ∼ Normal(0, 10)
+β ∼ Normal(0, 1)
+σ ∼ HalfCauchy(0, 2)
+σα ∼ HalfCauchy(0, 2)
+σβ ∼ HalfCauchy(0, 2)
+R ∼ LKJcorr(2)
+
+#13E2. Think up a context in which varying intercepts will be positively correlated with varying slopes.
+Provide a mechanistic explanation for the correlation.
+
+Negative correlations between varying intercepts and varying slopes occur when looking at the shrinkage. They are based on the probability mass of the posterior distribution. The most extreme intercepts and slopes have the strongest negative correlations.
+
+This can all be said for postive correlations between varying intercpets and varying slopes. A relatively simple way for positive correlations to occur is to plot the values for slopes and intercepts at all levels. If they are centered, they will not cluster around the "0" point and will lean more towards positive values. For example, in the admissions dataset, if there were more females that applied and that received admission, there would be a positive correlation for the varying intercepts and varying slopes.
+
+#13E3. When is it possible for a varying slopes model to have fewer effective parameters(as estimated by WAIC or DIC) than the corresponding model with fixed (unpooled) slopes? Explain.
+
+When the slopes for each estimate don't vary much. Typically that means that the pooling does not have a strong effect on the indiviudal estimates and it is best to just use a fixed slope.
+
+
+#13M1. Repeat the café robot simulation from the beginning of the chapter.This time,set rho to zero, so that there is no correlation between intercepts and slopes. How does the posterior distribution of the correlation reflect this change in the underlying simulation?
+
+```{r}
+library(rethinking)
+
+# average morning wait time
+a <- 3.5
+# average difference afternoon wait time
+b <- (-1)
+# std dev in intercepts
+sigma_a <- 1
+# std dev in slopes
+sigma_b <- 0.5
+# correlation between intercepts and slopes
+rho <- (-0.7)
+
+# define likelihood objects
+Mu <- c( a , b )
+cov_ab <- sigma_a*sigma_b*rho
+Sigma <- matrix( c(sigma_a^2,cov_ab,cov_ab,sigma_b^2) , ncol=2 )
+
+# simulate varying effects
+n.cafes <- 20
+library(MASS)
+set.seed(5)
+vary_effects <- mvrnorm( n = n.cafes , mu = Mu , Sigma = Sigma )
+a_cafe <- vary_effects[,1]
+b_cafe <- vary_effects[,2]
+
+# simulate wait times
+n.visits <- 10
+afternoon <- rep( 0:1, n.visits*n.cafes/2 )
+cafe_id <- rep( 1:n.cafes , each=n.visits )
+mu <- a_cafe[cafe_id] + b_cafe[cafe_id]*afternoon
+sigma <- 0.5
+wait <- rnorm( n = n.visits*n.cafes, mean = mu, sd = sigma )
+d <- data.frame( cafe=cafe_id , afternoon=afternoon , wait=wait )
+
+mQ13M1 <- map2stan(
+  alist(
+    wait ~ dnorm( mu , sigma ),
+    mu <- a_cafe[cafe] + b_cafe[cafe]*afternoon,
+    c(a_cafe, b_cafe)[cafe] ~ dmvnorm2(Mu = c(a, b), sigma = sigma_cafe, Rho = Rho),
+    a ~ dnorm(0, 10),
+    b ~ dnorm(0, 10),
+    sigma_cafe ~ dcauchy(0, 2),
+    sigma ~ dcauchy(0, 2),
+    Rho ~ dlkjcorr(2)
+  ),
+  data=d, iter=5000 , warmup=2000 , chains=2 )
+
+
+posterior.samples <- extract.samples(mQ13M1)
+
+# posterior density plot for rho
+dens( posterior.samples$Rho[,1,2] )
+```
+
+The posterior densitity plot is close to 0. That is how the change in the simulation can demonstate that there is no correlation.
+
+#13M2. Fit this multilevel model to the simulated café data: 
+Wi ∼ Normal(μi, σ)
+μi = αcafé[i] + βcafé[i]Ai α
+café ∼ Normal(α, σα) β
+café ∼Normal(β,σβ)
+α ∼ Normal(0, 10)
+β ∼ Normal(0, 10)
+σ ∼ HalfCauchy(0, 1)
+σα ∼ HalfCauchy(0, 1) 
+σβ ∼HalfCauchy(0,1)
+
+Use WAIC to compare this model to the model from the chapter, the one that uses a multi-variate Gaussian prior. Explain the result.
+
+```{r}
+
+mQ13M1 <- map2stan(
+  alist(
+    wait ~ dnorm( mu , sigma ),
+    mu <- a_cafe[cafe] + b_cafe[cafe]*afternoon,
+    c(a_cafe, b_cafe)[cafe] ~ dmvnorm2(Mu = c(a, b), sigma = sigma_cafe, Rho = Rho),
+    a ~ dnorm(0, 10),
+    b ~ dnorm(0, 10),
+    sigma_cafe ~ dcauchy(0, 2),
+    sigma ~ dcauchy(0, 2),
+    Rho ~ dlkjcorr(2)
+  ),
+  data=d, iter=5000 , warmup=2000 , chains=2 )
+
+mQ13M2 <- map2stan(
+  alist(
+    wait ~ dnorm( mu , sigma ),
+    mu <- a_cafe[cafe] + b_cafe[cafe]*afternoon,
+    a_cafe[cafe] ~ dnorm(a, sigma_a),
+    b_cafe[cafe] ~ dnorm(b, sigma_b),
+    a ~ dnorm(0, 10),
+    b ~ dnorm(0, 10),
+    sigma ~ dcauchy(0, 1),
+    sigma_a ~ dcauchy(0, 1),
+    sigma_b ~ dcauchy(0, 1)
+  ),
+  data=d ,
+  iter=5000 , warmup=2000 , chains=2 )
+
+# compare models
+compare(mQ13M1, mQ13M2)
+
+posterior.samples.mQ13M1 <- extract.samples(mQ13M1)
+aQ13M1 <- apply( X = posterior.samples.mQ13M1$a_cafe , MARGIN = 2 , FUN = mean )
+bQ13M1 <- apply( X = posterior.samples.mQ13M1$b_cafe , MARGIN = 2 , FUN = mean )
+posterior.samples.mQ13M2 <- extract.samples(mQ13M2)
+aQ13M2 <- apply( X = posterior.samples.mQ13M2$a_cafe, MARGIN = 2 , FUN = mean )
+bQ13M2 <- apply( X = posterior.samples.mQ13M2$b_cafe, MARGIN = 2 , FUN = mean )
+
+plot( aQ13M1 , bQ13M1 , xlab="intercept" , ylab="slope" ,
+      pch=16 , col=rangi2 , ylim=c( min(bQ13M1)-0.05 , max(bQ13M1)+0.05 ) ,
+      xlim=c( min(aQ13M1)-0.1 , max(aQ13M1)+0.1 ) )
+points( aQ13M2 , bQ13M2 , pch=1 )
+```
+There is a negative correlation between intercept and slope. The reason is because the intercepts are larger than average and pushed to the right on the x-axis, and the slopes are pushed to the left and are smaller than average on the y-axis.
+
+#13M3. Re-estimate the varying slopes model for the UCBadmit data, now using a non-centered pa- rameterization. Compare the efficiency of the forms of the model, using n_eff. Which is better? Which chain sampled faster?
+
+```{r}
+data(UCBadmit)
+d <- UCBadmit
+
+d$male <- ifelse( d$applicant.gender=="male" , 1 , 0 )
+d$dept_id <- coerce_index( d$dept )
+
+m13M3 <- map2stan(
+  alist(
+    admit ~ dbinom( applications, p ),
+    logit(p) <- a_dept[dept_id] +
+      bm_dept[dept_id]*male,
+    c(a_dept, bm_dept)[dept_id] ~ dmvnorm2( c(a, bm), sigma_dept, Rho ),
+    a ~ dnorm(0, 10),
+    bm ~ dnorm(0, 1),
+    sigma_dept ~ dcauchy(0, 2),
+    Rho ~ dlkjcorr(2)
+  ),
+  data=d , iter=5000 , warmup=2000 , chains=2 )
+
+m13M3_noncentered <- map2stan(
+  alist(
+    admit ~ dbinom( applications, p ),
+    logit(p) <- a_dept[dept_id] + bm_dept[dept_id]*male,
+    c(a_dept, bm_dept)[dept_id] ~ dmvnormNC( sigma_dept, Rho ),
+    a ~ dnorm(0, 10),
+    bm ~ dnorm(0, 1),
+    sigma_dept ~ dcauchy(0, 2),
+    Rho ~ dlkjcorr(2)
+  ),
+  data=d , iter=5000 , warmup=2000 , chains=2 )
+
+# compare centered and non-centered models
+compare(m13M3, m13M3_noncentered)
+
+##changed the chain length because it took too long
+```
+
+Both of the models look pretty much the same. The only difference is that the the non-centered model samples were much more efficent based on "n_eff".
+
+#13M4. Use WAIC to compare the Gaussian process model of Oceanic tools to the models fit to the same data in Chapter 10. Pay special attention to the effective numbers of parameters, as estimated by WAIC.
+```{r}
+library(rethinking)
+data(Kline)
+d <- Kline
+
+d$log_pop <- log(d$population)
+d$contact_high <- ifelse( d$contact=="high" , 1 , 0 )
+
+m10.10 <- map2stan(
+    alist(
+        total_tools ~ dpois( lambda ),
+        log(lambda) <- a + bp*log_pop +
+            bc*contact_high + bpc*contact_high*log_pop,
+        a ~ dnorm(0,100),
+        c(bp,bc,bpc) ~ dnorm(0,1)
+), data=d, warmup=2000 , iter=1e4 , chains=4 )
+
+precis(m10.10)
+```
+
+```{r}
+library(rethinking)
+data(islandsDistMatrix)
+# display short column names, so fits on screen
+Dmat <- islandsDistMatrix
+
+colnames(Dmat) <- c("Ml","Ti","SC","Ya","Fi","Tr","Ch","Mn","To","Ha")
+round(Dmat,1)
+data(Kline2) # load the ordinary data, now with coordinates
+d <- Kline2
+d$society <- 1:10 # index observations
+
+m13.7 <- map2stan(
+    alist(
+        total_tools ~ dpois(lambda),
+        log(lambda) <- a + g[society] + bp*logpop,
+        g[society] ~ GPL2( Dmat , etasq , rhosq , 0.01 ),
+        a ~ dnorm(0,10),
+        bp ~ dnorm(0,1),
+        etasq ~ dcauchy(0,1),
+        rhosq ~ dcauchy(0,1)
+    ),
+    data=list(
+        total_tools=d$total_tools,
+        logpop=d$logpop,
+        society=d$society,
+        Dmat=islandsDistMatrix),
+    warmup=2000 , iter=1e4 , chains=4 )
+precis(m13.7)
+compare(m10.10, m13.7)
+
+```
+

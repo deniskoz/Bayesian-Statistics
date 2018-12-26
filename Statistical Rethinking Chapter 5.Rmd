@@ -1,0 +1,162 @@
+```{r}
+library(rethinking)
+library(rstan)
+library(ggplot2)
+```
+
+
+#5E1. Which of the linear models below are multiple linear regressions?
+(4) μi =α+βxxi +βzzi
+
+#5E2. Write down a multiple regression to evaluate the claim: Animal diversity is linearly related to latitude, but only after controlling for plant diversity. You just need to write down the model definition.
+
+yi ∼ Normal(μi, σ)
+μi = α+βaAi +βbBi
+α ∼ Normal(0, 50) 
+βa ∼ Normal(0, 1) 
+βb ∼ Normal(0, 1)
+σ ∼ Uniform(0, 10)
+
+or:
+latitude ∼ Normal(μi, σ)
+μi =  α + βa(Animal Diversity) + βb(plant Diversity)
+
+α ∼ Normal(0, 50) 
+βa ∼ Normal(0, 1) 
+βb ∼ Normal(0, 1)
+σ ∼ Uniform(0, 10)
+
+You add in plant diversity into the regression to control for it.
+
+#5E3. Write down a multiple regression to evaluate the claim: Neither amount of funding nor size of laboratory is by itself a good predictor of time to PhD degree; but together these variables are both positively associated with time to degree. Write down the model definition and indicate which side of zero each slope parameter should be on.
+yi ∼ Normal(μi, σ)
+μi = α+βaAi +βbBi
+α ∼ Normal(0, 50) 
+βa ∼ Normal(0, 1) 
+βb ∼ Uniform(0, 1)
+σ ∼ Uniform(0, 10)
+
+or:
+
+Time_PhD ∼ Normal(μi, σ)
+μi = α + βa(Funding) + βb(Labsize)
+
+α ∼ Normal(0, 50) 
+βa ∼ Normal(0, 1) 
+βb ∼ uniform(0, 1)
+σ ∼ Uniform(0, 10)
+
+It could be a masked relationship, but we don't know if the 2 predictors are correlated with one another. In addition, there isn't enough information, but size of the lab may need to be transformed.
+
+#5E4. Suppose you have a single categorical predictor with 4 levels (unique values), labeled A, B, C and D. Let Ai be an indicator variable that is 1 where case i is in category A. Also suppose Bi, Ci, and Di for the other categories. Now which of the following linear models are inferentially equivalent ways to include the categorical variable in a regression? Models are inferentially equivalent when it’s possible to compute one posterior distribution from the posterior distribution of another model.
+
+(3) μi = α+βBBi +βCCi +βDDi
+
+#5M1. Invent your own example of a spurious correlation. An outcome variable should be correlated with both predictor variables. But when both predictors are entered in the same model, the correlation between the outcome and one of the predictors should mostly vanish (or at least be greatly reduced).
+```{r}
+
+N <- 10000
+x_real <- rnorm(N)
+x_spur <- rnorm(N, x_real)
+y <- rnorm(N, x_real)
+
+# plot correlations
+d <- data.frame(y,x_real,x_spur)
+plot(d)
+
+# buid model, inspect results
+model <- lm(y ~ x_real + x_spur)
+precis(model)
+```
+
+
+
+#5M2. Invent your own example of a masked relationship. An outcome variable should be correlated with both predictor variables, but in opposite directions. And the two predictor variables should be correlated with one another.
+```{r}
+ 
+# number of cases
+N <- 10000
+# correlation between x_pos and x_neg
+rho <- 0.9
+# x_pos as Gaussian
+x_pos <- rnorm( N )
+# x_neg correlated with x_pos
+x_neg <- rnorm( N , rho*x_pos ,  
+    sqrt(1-rho^2) )
+# y equally associated with x_pos, x_neg
+y <- rnorm( N , x_pos - x_neg )
+# bind all together in data frame
+d <- data.frame(y,x_pos,x_neg)
+plot(d)
+
+# build models, inspect results
+model <- lm(y ~ x_pos + x_neg)
+precis(model)
+
+```
+
+
+#5M3. It is sometimes observed that the best predictor of fire risk is the presence of firefighters— States and localities with many firefighters also have more fires. Presumably firefighters do not cause fires. Nevertheless, this is not a spurious correlation. Instead fires cause firefighters. Consider the same reversal of causal inference in the context of the divorce and marriage data. How might a high divorce rate cause a higher marriage rate? Can you think of a way to evaluate this relationship, using multiple regression?
+High divorce rate might cause a higher marriage rate because higher divorce rates creare more opportunities for multiple marriages. Just have marriage rate as the outcome variable.
+
+MarriageRate ∼ Normal(μi, σ)
+μi =  α + βa(Divorce Rate) + βb(Age)
+
+α ∼ Normal(10, 10) 
+βa ∼ Normal(0, 1) 
+βb ∼ normal(0, 1)
+σ ∼ Uniform(0, 10)
+
+#5M4. In the divorce data, States with high numbers of Mormons (members of The Church of Jesus Christ of Latter-day Saints, LDS) have much lower divorce rates than the regression models expected. Find a list of LDS population by State and use those numbers as a predictor variable, predicting di- vorce rate using marriage rate, median age at marriage, and percent LDS population (possibly stan- dardized). You may want to consider transformations of the raw percent LDS variable.
+```{r}
+# load data
+data(WaffleDivorce)
+d <- WaffleDivorce
+d$percentLDS <- c(0.77, 4.53, 6.10, 1.04, 1.94, 2.70, 0.44, 0.57, 0.75, 0.82, 5.20, 26.23, 0.45, 0.67, 0.90, 1.30, 0.79, 0.64, 0.82, 0.72, 0.40, 0.45, 0.59, 0.73, 1.16, 4.80, 1.30, 6.13, 0.65, 0.37, 3.33, 0.41, 0.84, 1.49, 0.53, 1.22, 3.72, 0.40, 0.39, 0.81, 1.22,
+               0.76,1.25, 67.39, 0.74, 1.13, 3.90, 0.93, 0.46, 11.61 )
+
+# standardize variables
+d$Marriage.standardized <- (d$Marriage - mean(d$Marriage)) / sd(d$Marriage)
+
+d$MedianAgeMarriage.standardized <- (d$MedianAgeMarriage - mean(d$MedianAgeMarriage)) / sd(d$MedianAgeMarriage)
+
+d$pct_LDS.standardized <- (d$percentLDS - mean(d$percentLDS)) / sd(d$percentLDS)
+
+# build a model, inspect results
+model <- map(
+  alist(
+    Divorce ~ dnorm(mean = mu, sd = sigma),
+    mu <- alpha + beta.marriage.rate * Marriage.standardized + beta.median.age.at.marriage * MedianAgeMarriage.standardized + beta.lds * pct_LDS.standardized,
+    alpha ~ dnorm(mean = 0, sd = 100),
+    c(beta.marriage.rate, beta.median.age.at.marriage, beta.lds) ~ dnorm(mean = 0, sd = 10),
+    sigma ~ dunif(min = 0, 10)
+  ),
+  data = d
+)
+precis(model)
+```
+
+
+#5M5. One way to reason through multiple causation hypotheses is to imagine detailed mechanisms through which predictor variables may influence outcomes. For example, it is sometimes argued that the price of gasoline (predictor variable) is positively associated with lower obesity rates (outcome variable). However, there are at least two important mechanisms by which the price of gas could reduce obesity. First, it could lead to less driving and therefore more exercise. Second, it could lead to less driving, which leads to less eating out, which leads to less consumption of huge restaurant meals. Can you outline one or more multiple regressions that address these two mechanisms? Assume you can have any predictor data you need.
+
+obesityrate ∼ Normal(μi, σ)
+μi =  α + βa(gas price) + βb (miles driven) + βb(Exercise rate)
+
+α ∼ Normal(0, 50) 
+βa ∼ uniform(0, 1) 
+βb ∼ normal(0, 100)
+βc ∼ normal(0, 1)
+σ ∼ Uniform(0, 10)
+
+OR:
+
+obesityrate ∼ Normal(μi, σ)
+μi = α + βa(gas price) + βb(Rate of eating out) +βc(restaurant calorie consumption)
+
+α ∼ Normal(0, 50) 
+βa ∼ unifrom(0, 1) 
+βb ∼ uniform(0, 1)
+βc ∼ normal(0, 1)
+σ ∼ Uniform(0, 10)
+
+

@@ -1,0 +1,141 @@
+Easy Questions
+  Given Code
+
+```{r}
+library(rethinking)
+library(rstan)
+library(ggplot2)
+```
+```{r}
+p_grid <- seq( from=0 , to=1 , length.out=1000 )
+prior <- rep( 1 , 1000 )
+likelihood <- dbinom( 6 , size=9 , prob=p_grid )
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+set.seed(100)
+samples <- sample( p_grid , prob=posterior , size=1e4 , replace=TRUE )
+```
+
+3E1. How much posterior probability lies below p = 0.2?
+```{r}
+sum(posterior[p_grid < 0.2])
+```
+
+3E2. How much posterior probability lies above p = 0.8?
+```{r}
+sum(posterior[p_grid < 0.8])
+```
+
+3E3. How much posterior probability lies between p = 0.2 and p = 0.8?
+```{r}
+sum(posterior[p_grid > 0.2 & p_grid < 0.8])
+```
+
+3E4. 20% of the posterior probability lies below which value of p?
+```{r}
+quantile( samples , 0.2 )
+```
+
+3E5. 20% of the posterior probability lies above which value of p?
+```{r}
+quantile( samples , 0.8 ) 
+```
+
+3E6. Which values of p contain the narrowest interval equal to 66% of the posterior probability? We Need to use highest posterior density interval (HPDI)
+```{r}
+ HPDI( samples , prob=0.66 )
+```
+
+3E7. Which values of p contain 66% of the posterior probability, assuming equal posterior probabil- ity both below and above the interval?  We Need to use percentile intervals (PI)
+```{r}
+PI( samples , prob=0.66 )
+```
+
+Medium Questions
+
+3M1. Suppose the globe tossing data had turned out to be 8 water in 15 tosses. Construct the poste-
+rior distribution, using grid approximation. Use the same flat prior as before.
+```{r}
+#Observed number of flips that were water
+observed_water <- 8
+#Total amount of flips
+total_flips <- 15
+#Define Grid
+p_grid <- seq( from = 0 , to = 1 , length.out = 1000 )
+#Define Prior
+prior <- rep(1, 1000)
+#Likelihood
+likelihood <- dbinom( observed_water , size = total_flips , prob = p_grid )
+# compute product of likelihood and prior
+unstd.posterior <- likelihood * prior
+# standardize the posterior, so it sums to 1
+posterior <- unstd.posterior / sum(unstd.posterior)
+plot( p_grid , posterior , type="b" ,
+      xlab="probability of water" , ylab="posterior probability" )
+mtext( length(p_grid) )
+```
+
+      These numbers may change when re-running due to the randomn number generator
+
+3M2. Draw 10,000 samples from the grid approximation from above. Then use the samples to cal-
+culate the 90% HPDI for p.
+```{r}
+samples <- sample(p_grid, prob=posterior, size = 1e4, replace = TRUE)
+HPDI(samples, prob = 0.9)
+```
+
+
+3M3. Construct a posterior predictive check for this model and data. This means simulate the distri- bution of samples, averaging over the posterior uncertainty in p. What is the probability of observing 8 water in 15 tosses?
+```{r}
+posterior_predictive_check <- rbinom(1e4, size = 15, prob=samples)
+table(posterior_predictive_check)/1e4
+```
+The probability of observing 8 water in 15 tosses is 0.1428 (it has the highest probability).
+
+
+
+3M4. Using the posterior distribution constructed from the new (8/15) data, now calculate the proability of observing 6 water in 9 tosses.
+```{r}
+posterior_predictive_check2 <- rbinom(1e4, size=9, prob=samples)
+table(posterior_predictive_check2)/1e4
+```
+The probability of observing 6 water in 9 tosses is 0.1695.
+
+3M5. Start over at 3M1, but now use a prior that is zero below p = 0.5 and a constant above p = 0.5. This corresponds to prior information that a majority of the Earth’s surface is water. Repeat each problem above and compare the inferences. What difference does the better prior make? If it helps, compare inferences (using both priors) to the true value p = 0.7.
+```{r}
+# 3M1
+observed_water <- 8
+total_flips <- 15
+p_grid <- seq( from = 0 , to = 1 , length.out = 1000 )
+
+# define prior p that is equal to zero when p < 0.5 and is a positive constant when p ≥ 0.5
+prior <- ifelse( p_grid < 0.5 , 0 , 1 )
+
+# likelihood
+likelihood <- dbinom( observed_water , size= total_flips , prob=p_grid )
+
+# compute product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to 1
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# 3M2
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+HPDI(samples, prob = 0.9)
+```
+With more prior information, the parameters have narrowed down compared to a flat prior distribution.
+
+```{r}
+#3M3
+posterior_predictive_check <- rbinom(1e4, size = 15, prob=samples)
+table(posterior_predictive_check)/1e4
+```
+The probability of observing 8 water in 15 tosses has increased from 0.1428 to 0.1592 but not the most probable.
+
+```{r}
+#3M4
+posterior_predictive_check2 <- rbinom(1e4, size=9, prob=samples)
+table(posterior_predictive_check2)/1e4
+```
+The probability of observing 6 water in 9 tosses has increased from 0.1695 to 0.2357 and is now the most probable. This is very close to the true value of p = .7 because .7 * 9( # of tosses) = 6.3
